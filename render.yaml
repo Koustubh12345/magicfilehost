@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: tenseihost
+    env: docker
+    repo: https://github.com/Koustubh12345/magicfilehost.git # <-- IMPORTANT: Change to your repo URL
+    branch: main
+    plan: free
+    envVars:
+      - key: API_ID
+        value: "23048702" # Your API ID
+      - key: API_HASH
+        value: "2ce9a07cc844e09922a39c654c2fc9fa" # Your API Hash
+      - key: BOT_TOKEN
+        value: "8109732136:AAGoVJURJtbUJuqcN84ciC5We2Ni3W4OMYM" # Your Bot Token
+      - key: BOT_USERNAME
+        value: "PixelsVaultbot" # Your Bot Username
+      - key: GOOGLE_CLIENT_ID
+        value: "96557220545-tlt4heep6mbnfae2gi916oin1pu5vqur.apps.googleusercontent.com"
+      - key: GOOGLE_CLIENT_SECRET
+        value: "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"
+      - key: GDRIVE_FOLDER_ID
+        value: "1xYnlUfGdoTzoqKBUTgARXGfCD36IlqA9"
+      - key: ADMINS
+        value: "5431714552" # Your Telegram User ID

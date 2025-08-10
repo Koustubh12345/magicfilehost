@@ -1,0 +1,10 @@
+pyrogram==2.0.106
+Tgcrypto
+aiohttp
+Flask
+psutil
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+pytz
+shortzy
