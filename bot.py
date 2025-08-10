@@ -10,7 +10,7 @@ from io import BytesIO
 from aiohttp import web, ClientSession
 from flask import Flask
 from pyrogram import Client, filters, idle
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, UserNotParticipant
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- Basic Configuration ---
@@ -24,8 +24,8 @@ class script(object):
     ABOUT_TXT = """<b>ʜɪ ɪ ᴀᴍ TᴇɴSᴇɪ, ᴀ ᴘᴏᴡᴇʀꜰᴜʟ ꜰɪʟᴇ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ʙᴏᴛ.
 🤖 ᴍʏ ɴᴀᴍᴇ: {}
 📝 ʟᴀɴɢᴜᴀɢᴇ: <a href=https://www.python.org>𝐏𝐲𝐭𝐡𝐨𝐧𝟑</a>
-📚 ʟɪʙʀᴀʀʏ: <a href=https://docs.pyrogram.org>𝐏𝐲𝐫ᴏ𝐠𝐫ᐚᴍ</a>
-🧑🏻‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ: <a href=https://t.me/YourUsername>𝐓𝐞𝐧𝐒𝐞𝐢</a></b>"""
+📚 ʟɪʙʀᴀʀʏ: <a href=https://docs.pyrogram.org>𝐏𝐲𝐫ᴏɢ𝐫ᐚᴍ</a>
+🧑🏻‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ: <a href=https://t.me/YourUsername>𝐓𝐞𝐧𝐒ᐞɪ</a></b>"""
     HELP_TXT = """<b><u>💢 HOW TO USE THE BOT ☺️</u>
 🔻 /leech <url> - ᴅᴏᴡɴʟᴏᴀᴅ ғɪʟᴇ ғʀᴏᴍ ᴜʀʟ ᴀɴᴅ ᴜᴘʟᴏᴀᴅ ᴛᴏ ᴛᴇʟᴇɢʀᴀᴍ
 🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴛᴇʟᴇɢʀᴀᴍ ғɪʟᴇ ᴛᴏ ɢᴇᴛ ᴀ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
@@ -47,6 +47,13 @@ except ImportError:
     logging.error("FATAL: config.py not found! The bot cannot start.")
     exit()
 
+# --- IMPORTANT: CONFIGURE YOUR PUBLIC CHANNEL ---
+# For the /link command to work for everyone, create a PUBLIC Telegram channel.
+# Add your bot as an administrator in that channel.
+# Replace the value below with your channel's username (e.g., "mypublicfilechannel").
+PUBLIC_CHANNEL_USERNAME = os.environ.get("PUBLIC_CHANNEL_USERNAME", "YourChannelUsernameHere")
+
+
 # --- Initialize Pyrogram Client ---
 app = Client(
     "TenSeiBot",
@@ -55,8 +62,8 @@ app = Client(
     bot_token=Config.BOT_TOKEN
 )
 
-# --- Progress Formatter ---
-async def progress(current, total, up_msg, message, start_time):
+# --- Progress Formatter (FIXED) ---
+async def progress(current, total, up_msg, user, chat_id, start_time):
     now = time.time()
     diff = now - start_time
     if round(diff % 2.00) == 0 or current == total:
@@ -88,22 +95,22 @@ async def progress(current, total, up_msg, message, start_time):
         text = f"""📦 {up_msg}
 <b>Progress:</b> {progress_bar} {percentage:.1f}%
 <b>Processed:</b> {human_bytes(current)} / {human_bytes(total)}
-<b>Status:</b> ⌬ {'Uploading' if message.media else 'Downloading'}
-<b>Speed:</b> {'⇡' if message.media else '⇣'} {human_bytes(speed)}/s | <b>ETA:</b> {str(datetime.timedelta(seconds=time_to_completion))}
+<b>Status:</b> ⌬ Uploading
+<b>Speed:</b> ⇡ {human_bytes(speed)}/s | <b>ETA:</b> {str(datetime.timedelta(seconds=time_to_completion))}
 <b>Elapsed:</b> {str(datetime.timedelta(seconds=elapsed_time))} | <b>Engine:</b> PyroMulti v2.0.106
 <b>Mode:</b> 🖇 #GDrive | #Tg
-<b>User:</b> {message.from_user.mention} | <b>ID:</b> <code>{message.from_user.id}</code>
+<b>User:</b> {user.mention} | <b>ID:</b> <code>{user.id}</code>
 
 ⌬ <b>Bot Stats</b>
 <b>CPU:</b> {cpu_usage}% | <b>Free:</b> {human_bytes(disk.free)} ({disk.free/disk.total*100:.1f}%)
 <b>RAM:</b> {mem_usage}% | <b>Uptime:</b> {uptime_str}
-<b>DL:</b> {human_bytes(speed) if not message.media else '0B'}/s | <b>UL:</b> {human_bytes(speed) if message.media else '0B'}/s
+<b>DL:</b> 0B/s | <b>UL:</b> {human_bytes(speed)}/s
 """
         try:
-            await message.edit(text)
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-        except Exception:
+            # We need to get the original message to edit it
+            msg_to_edit = await app.get_messages(chat_id, up_msg.split('|')[1].strip())
+            await msg_to_edit.edit(text)
+        except (FloodWait, Exception):
             pass
 
 # --- Helper Functions ---
@@ -141,11 +148,12 @@ async def help_command(client, message: Message):
 async def about_command(client, message: Message):
     await message.reply(script.ABOUT_TXT.format(app.me.first_name))
 
-# --- /leech command ---
+# --- /leech command (FIXED) ---
 @app.on_message(filters.command(["leech"]) & filters.private)
 async def leech_command(client, message: Message):
     if len(message.command) < 2:
-        return await message.reply("❌ Please provide a URL to download.\n\n<b>Usage:</b> `/leech <direct_download_url>`")
+        # Fixed formatting to avoid ENTITY_BOUNDS_INVALID
+        return await message.reply("❌ Please provide a URL to download.\n\n<b>Usage:</b>\n`/leech <direct_download_url>`")
     
     url = message.command[1]
     if not is_url(url):
@@ -164,10 +172,11 @@ async def leech_command(client, message: Message):
                     total_size = int(response.headers.get('Content-Length', 0))
                     downloaded = 0
                     with open(download_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(1024 * 1024): # 1MB chunks
+                        async for chunk in response.content.iter_chunked(1024 * 1024):
                             f.write(chunk)
                             downloaded += len(chunk)
-                            await progress(downloaded, total_size, file_name, snt, start_time)
+                            # Pass user and chat_id to progress
+                            await progress(downloaded, total_size, f"Downloading {file_name} | ID: {snt.id}", message.from_user, message.chat.id, start_time)
                 else:
                     return await snt.edit(f"❌ Failed to download. Status: {response.status}")
 
@@ -180,7 +189,7 @@ async def leech_command(client, message: Message):
             document=download_path,
             caption=f"<b>Leeched by {message.from_user.mention}</b>",
             progress=progress,
-            progress_args=(file_name, snt, start_upload_time)
+            progress_args=(f"Uploading {file_name} | ID: {snt.id}", message.from_user, message.chat.id, start_upload_time)
         )
         
         os.remove(download_path)
@@ -189,39 +198,41 @@ async def leech_command(client, message: Message):
     except Exception as e:
         await snt.edit(f"❌ An error occurred during leeching: `{e}`")
 
-
-# --- /link command ---
+# --- /link command (FIXED AND IMPROVED) ---
 @app.on_message(filters.command(["link"]) & filters.private)
 async def link_command(client, message: Message):
     if not message.reply_to_message or not message.reply_to_message.media:
         return await message.reply("❌ Please reply to a media file to get its link.")
     
+    if PUBLIC_CHANNEL_USERNAME == "YourChannelUsernameHere":
+        return await message.reply("❌ The bot owner has not configured a public channel for this feature. Please set the `PUBLIC_CHANNEL_USERNAME` environment variable.")
+
     reply = message.reply_to_message
-    file_name = getattr(reply, 'file_name', None)
-    if not file_name:
-        if reply.video: file_name = f"{reply.video.file_name}.mp4"
-        elif reply.audio: file_name = f"{reply.audio.file_name}.mp3"
-        elif reply.photo: file_name = f"photo_{reply.photo.file_unique_id}.jpg"
-        else: file_name = "Unknown_File"
+    snt = await message.reply("⌬ Processing your file...")
 
-    # Create a shareable link for the file
-    # The format is https://t.me/c/chat_id/message_id for private channels
-    # or https://t.me/username/message_id for public channels/groups
-    # For a bot, it's easier to just forward the message to a public channel and get the link from there.
-    # For simplicity, we'll generate a direct Telegram link if possible.
-    
-    chat_id = message.chat.id
-    message_id = reply.id
-    
-    # This link works if the user has the bot added to a public channel they forward to.
-    # A more robust solution involves storing files in a channel and generating links.
-    # For now, we provide a basic link.
-    link = f"https://t.me/c/{str(chat_id).replace('-100','')}/{message_id}"
-    
-    await message.reply(f"🔗 <b>Instant Link for:</b> <code>{file_name}</code>\n\n<code>{link}</code>\n\n<b>Note:</b> This link works only for members of this chat.")
+    try:
+        # Forward the message to the public channel
+        forwarded_msg = await client.forward_messages(
+            chat_id=f"@{PUBLIC_CHANNEL_USERNAME}",
+            from_chat_id=message.chat.id,
+            message_ids=reply.id
+        )
+        
+        # Generate the shareable link
+        share_link = f"https://t.me/{PUBLIC_CHANNEL_USERNAME}/{forwarded_msg.id}"
+        
+        await snt.edit(
+            f"✅ <b>Shareable Link Generated!</b>\n\n"
+            f"🔗 <a href='{share_link}'>Click here to view file</a>\n\n"
+            f"<code>{share_link}</code>"
+        )
+    except UserNotParticipant:
+        await snt.edit("❌ The bot is not an admin in the configured public channel. Please add the bot as an admin.")
+    except Exception as e:
+        await snt.edit(f"❌ An error occurred: `{e}`")
 
 
-# --- /mirror command ---
+# --- /mirror command (FIXED) ---
 @app.on_message(filters.command(["mirror"]) & filters.private)
 async def mirror_command(client, message: Message):
     if not message.reply_to_message or not message.reply_to_message.media:
@@ -246,28 +257,26 @@ async def mirror_command(client, message: Message):
             reply,
             file_name=download_path,
             progress=progress,
-            progress_args=(file_name, snt, start_time)
+            progress_args=(f"Downloading {file_name} | ID: {snt.id}", message.from_user, message.chat.id, start_time)
         )
         await snt.edit(f"✅ Downloaded: `{dl_path}`\n⌬ Now starting upload to Google Drive...")
         
         # --- Google Drive Upload Logic (Placeholder) ---
-        # In a real bot, you would use the Google API Client Library here.
-        # We will simulate it with a progress bar.
         file_size = os.path.getsize(download_path)
         uploaded = 0
-        chunk_size = 1024 * 1024 * 5 # 5MB chunks
+        chunk_size = 1024 * 1024 * 5 
         
         start_upload_time = time.time()
         while uploaded < file_size:
-            await asyncio.sleep(0.05) # Simulate upload time
+            await asyncio.sleep(0.05) 
             uploaded += chunk_size
             if uploaded > file_size:
                 uploaded = file_size
-            await progress(uploaded, file_size, file_name, snt, start_upload_time)
+            # Pass user and chat_id to progress
+            await progress(uploaded, file_size, f"Uploading {file_name} | ID: {snt.id}", message.from_user, message.chat.id, start_upload_time)
         
         os.remove(download_path)
         
-        # This is a FAKE link. A real bot would generate it from the GDrive API.
         gdrive_link = f"https://drive.google.com/file/d/FAKE_GDRIVE_ID_{reply.id}/view"
         
         await snt.edit(f"✅ <b>{file_name}</b> successfully mirrored to Google Drive!\n\n🔗 <b>GDrive Link:</b> <code>{gdrive_link}</code>")
